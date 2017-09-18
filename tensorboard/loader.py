@@ -823,13 +823,15 @@ class RunReader(object):
   def __init__(self, customer_number, experiment_id, run_id, name):
     """Creates new instance.
 
+    A row with the primary key (customer_number, experiment_id, run_id) should
+    already exist in the table.
+
     Args:
       customer_number: Integer identifying the customer that owns the
         row.
       experiment_id: The experiment ID.
       run_id: Run id.
-      rowid: Primary key of run in `Runs` table, which should already
-          be inserted. This is a bit-packed int made by db.RUN_ROWID.
+
       name: Display name of run.
 
     :type rowid: int
@@ -871,8 +873,9 @@ class RunReader(object):
       return False
     with contextlib.closing(db_conn.cursor()) as c:
       c.execute(
-          'SELECT rowid, offset FROM EventLogs WHERE run_id = ? AND path = ?',
-          (self.run_id, log.path))
+          'SELECT rowid, customer_number, run_id, event_log_id, offset '
+          'FROM EventLogs WHERE customer_number = ? AND run_id = ? AND path = ?',
+          (self.customer_number, self.run_id, log.path))
       row = c.fetchone()
       if row:
         log.rowid = row[0]
