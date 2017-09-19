@@ -148,6 +148,24 @@ BIG_TENSORS_TABLE = TableSchema(
              ColumnSchema('tensor', BytesColumnType())],
     keys=['rowid', 'customer_number', 'tag_id', 'step_count'])
 
+
+# Event logs are files written to disk by TensorFlow via FileWriter,
+# which uses PyRecordWriter to output records containing
+# binary-encoded tf.Event protocol buffers.
+# This table is used by FileLoader to track the progress of files
+# being loaded off disk into the database.
+# Each time FileLoader runs a transaction committing events to the
+# database, it updates the offset field.
+#
+# rowid: An arbitrary event_log_id in the first 29 bits, and the
+#   run_id in the higher 29 bits.
+# event_log_id: Unique id identifying this event log.
+# run_id: A reference to the id field of the associated row in the
+#  runs table. Must be the same as what's in the rowid bits.
+# path: The basename of the path of the event log file. It SHOULD be
+#  formatted: events.out.tfevents.UNIX_TIMESTAMP.HOSTNAME[SUFFIX]
+# offset: The byte offset in the event log file *after* the last
+#   successfully committed event record.
 EVENT_LOGS_TABLE = TableSchema(
     name='EventLogs',
     columns=[ColumnSchema('rowid', Int64ColumnType()),
@@ -160,6 +178,14 @@ EVENT_LOGS_TABLE = TableSchema(
     keys=['rowid', 'customer_number', 'run_id', 'event_log_id'])
 
 
+# This table stores information about experiments, which are sets of
+# runs.
+# Fields:
+# experiment_id: Random integer primary key in range [0,2^28).
+# name: (Uniquely indexed) Arbitrary string which is displayed to
+#   the user in the TensorBoard UI, which can be no greater than
+#   500 characters.
+# description: Arbitrary markdown text describing the experiment.
 EXPERIMENTS_TABLE = TableSchema(
     name='Experiments',
     columns=[ColumnSchema('customer_number', Int64ColumnType()),
@@ -175,6 +201,24 @@ PLUGINS_TABLE = TableSchema(
              ColumnSchema('name', StringColumnType(length=255), not_null=True)],
     keys=['plugin_id'])
 
+
+# This table stores information about runs. Each row usually
+# represents a single attempt at training or testing a TensorFlow
+# model, with a given set of hyper-parameters, whose summaries are
+# written out to a single event logs directory with a monotonic step
+# counter.
+# When a run is deleted from this table, TensorBoard SHOULD treat all
+# information associated with it as deleted, even if those rows in
+# different tables still exist.
+#
+# rowid: Row ID which has run_id in the low 29 bits and
+#        experiment_id in the higher 28 bits. This is used to control
+#        locality.
+# experiment_id: The 28-bit experiment ID.
+# run_id: Unique randomly generated 29-bit ID for this run.
+# name: Arbitrary string which is displayed to the user in the
+#       TensorBoard UI, which is unique within a given experiment,
+#       which can be no greater than 1900 characters.
 RUNS_TABLE = TableSchema(
     name='Runs',
     columns=[ColumnSchema('rowid', Int64ColumnType()),

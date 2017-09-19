@@ -690,6 +690,9 @@ class EventLogReader(object):
 
   Fields:
     rowid: An integer primary key in EventLogs table, or 0 if unknown.
+    customer_number: Id of the customer that owns this log.
+    run_id: The id of the run associated with this reader.
+    event_log_id: The unique id for this event log.
     path: A string with the path of the event log on the local or
         remote file system.
     timestamp: An integer of the number of seconds since the UNIX epoch
@@ -713,8 +716,15 @@ class EventLogReader(object):
     :type path: str
     :type record_reader_factory: (str, int) -> RecordReader
     """
-    self.rowid = 0
     self.path = tf.compat.as_text(path)
+    # TODO(jlewi): customer_number, run_id, and event_log_id get set in
+    # RunReader add_event_log. This seems a little brittle. Can we guard against
+    # accidentally using unset values for
+    # (customer_number, run_id, event_log_id)
+    self.customer_number = None
+    self.run_id = None
+    self.event_log_id = 0
+
     m = _EVENT_LOG_PATH_PATTERN.search(self.path)
     if not m:
       raise ValueError('Bad event log path: ' + self.path)
@@ -724,6 +734,10 @@ class EventLogReader(object):
     self._reader_factory = record_reader_factory
     self._reader = self._reader_factory(self.path, start_offset)
     self._key = (os.path.dirname(self.path), self.timestamp, self.hostname)
+
+  @property
+  def rowid(self):
+    return db.EVENT_LOG_ROWID.create(self.run_id, self.event_log_id)
 
   def get_next_event(self):
     """Reads an event proto from the file.
@@ -816,7 +830,9 @@ class RunReader(object):
   stream of events, ordered by step or timestamp.
 
   Fields:
-    rowid: The primary key of the corresponding row in Runs.
+    customer_number: The id of the customer that owns this run.
+    experiment_id: The id for this experiment.
+    run_id: The unique id for this number.
     name: Display name of this run.
   """
 
@@ -829,12 +845,14 @@ class RunReader(object):
     Args:
       customer_number: Integer identifying the customer that owns the
         row.
-      experiment_id: The experiment ID.
+      experiment_id: The id of the experiment this run belongs to.
       run_id: Run id.
 
       name: Display name of run.
 
-    :type rowid: int
+    :type customer_number: int
+    :type experiment_id: int
+    :type run_id: int
     :type name: str
     """
     self.customer_number = customer_number
@@ -872,21 +890,26 @@ class RunReader(object):
     if self._logs and log <= self._logs[-1]:
       return False
     with contextlib.closing(db_conn.cursor()) as c:
+      # Check if we've already started loading this event log into the DB.
+      # if we have then we return the offset so that we can continue loading
+      # events.
       c.execute(
           'SELECT rowid, customer_number, run_id, event_log_id, offset '
-          'FROM EventLogs WHERE customer_number = ? AND run_id = ? AND path = ?',
-          (self.customer_number, self.run_id, log.path))
+          'FROM EventLogs WHERE customer_number = ? AND run_id = ? AND '
+          'path = ?', (self.customer_number, self.run_id, log.path))
       row = c.fetchone()
+      log.run_id = self.run_id
+      log.customer_number = self.customer_number
       if row:
-        log.rowid = row[0]
-        log.set_offset(row[1])
+        log.event_log_id = [3]
+        log.set_offset(row[4])
       else:
-        event_log_id = db.EVENT_LOG_ID.generate()
-        log.rowid = db.EVENT_LOG_ROWID.create(self.run_id, event_log_id)
+        log.event_log_id = db.EVENT_LOG_ID.generate()
         c.execute(
-            ('INSERT INTO EventLogs (rowid, customer_number, run_id, event_log_id, path, offset)'
-             ' VALUES (?, ?, ?, ?, ?, 0)'),
-            (log.rowid, self.run_id, log.path))
+            ('INSERT INTO EventLogs (rowid, customer_number, run_id, '
+             'event_log_id, path, offset) VALUES (?, ?, ?, ?, ?, 0)'),
+            (log.rowid, self.customer_number, self.run_id, log.event_log_id,
+             log.path))
     tf.logging.debug('Adding %s', log)
     self._logs.append(log)
     # Skip over event logs we've already read.

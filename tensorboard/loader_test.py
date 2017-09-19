@@ -304,54 +304,54 @@ class RunReaderTest(LoaderTestCase):
 
   def testBadRowId_throwsValueError(self):
     with self.assertRaises(ValueError):
-      loader.RunReader(0, 'doodle')
+      loader.RunReader(0, 0, 0, 'doodle')
 
   def testEqualAndSortsByRowId(self):
-    a = loader.RunReader(db.RUN_ROWID.create(1, 1), 'doodle')
-    b = loader.RunReader(db.RUN_ROWID.create(1, 2), 'doodle')
-    c = loader.RunReader(db.RUN_ROWID.create(2, 1), 'doodle')
+    customer_number = 27
+    a = loader.RunReader(customer_number, 1, 1, 'doodle')
+    b = loader.RunReader(customer_number, 1, 2, 'doodle')
+    c = loader.RunReader(customer_number, 2, 1, 'doodle')
     self.assertEqual([a, b, c], sorted([c, b, a]))
 
   def testFields(self):
-    id_ = db.RUN_ROWID.create(1, 1)
-    with loader.RunReader(id_, 'doodle') as run:
+    id_ = db.RUN_ROWID.create(2, 3)
+    with loader.RunReader(1, 2, 3, 'doodle') as run:
       self.assertEqual('doodle', run.name)
+      self.assertEqual(1, run.customer_number)
+      self.assertEqual(2, run.experiment_id)
+      self.assertEqual(3, run.run_id)
       self.assertEqual(id_, run.rowid)
 
   def testClose_canBeCalledMultipleTimes(self):
-    id_ = db.RUN_ROWID.create(1, 1)
     path = self._save_records('events.out.tfevents.0.localhost', [])
     with self.connect_db() as db_conn, self.EventLog(path) as log:
-      run = loader.RunReader(id_, 'doodle')
+      run = loader.RunReader(1, 2, 3, 'doodle')
       run.add_event_log(db_conn, log)
       run.close()
       run.close()
 
   def testNoEventLogs_returnsNone(self):
-    id_ = db.RUN_ROWID.create(1, 1)
-    with loader.RunReader(id_, 'doodle') as run:
+    with loader.RunReader(2, 1, 1, 'doodle') as run:
       self.assertIsNone(run.get_next_event())
 
   def testReadOneEvent(self):
-    id_ = db.RUN_ROWID.create(1, 1)
     event = tf.Event(step=123)
     path = self._save_records('events.out.tfevents.0.localhost',
                               [event.SerializeToString()])
     with self.connect_db() as db_conn:
       with self.EventLog(path) as log:
-        with loader.RunReader(id_, 'doodle') as run:
+        with loader.RunReader(2, 1, 1, 'doodle') as run:
           run.add_event_log(db_conn, log)
           self.assertEqual(event, run.get_next_event())
           self.assertIsNone(run.get_next_event())
 
   def testProgress(self):
-    id_ = db.RUN_ROWID.create(1, 1)
     event = tf.Event(step=123)
     path = self._save_records('events.out.tfevents.0.localhost',
                               [event.SerializeToString()])
     with self.connect_db() as db_conn:
       with self.EventLog(path) as log:
-        with loader.RunReader(id_, 'doodle') as run:
+        with loader.RunReader(2, 1, 1, 'doodle') as run:
           run.add_event_log(db_conn, log)
           self.assertEqual(0, run.get_offset())
           self.assertGreater(run.get_size(), 0)
@@ -360,7 +360,6 @@ class RunReaderTest(LoaderTestCase):
           self.assertEqual(run.get_offset(), run.get_size())
 
   def testMarkReset(self):
-    id_ = db.RUN_ROWID.create(1, 1)
     event1 = tf.Event(step=123)
     event2 = tf.Event(step=456)
     path1 = self._save_records('events.out.tfevents.1.localhost',
@@ -369,7 +368,7 @@ class RunReaderTest(LoaderTestCase):
                                [event2.SerializeToString()])
     with self.connect_db() as db_conn:
       with self.EventLog(path1) as log1, self.EventLog(path2) as log2:
-        with loader.RunReader(id_, 'doodle') as run:
+        with loader.RunReader(2, 1, 1, 'doodle') as run:
           run.add_event_log(db_conn, log1)
           run.add_event_log(db_conn, log2)
           self.assertIsNotNone(run.mark_peek_reset())
@@ -383,7 +382,6 @@ class RunReaderTest(LoaderTestCase):
           self.assertIsNone(run.mark_peek_reset())
 
   def testMarkReset_acrossFiles(self):
-    id_ = db.RUN_ROWID.create(1, 1)
     event1 = tf.Event(step=123)
     event2 = tf.Event(step=456)
     path1 = self._save_records('events.out.tfevents.1.localhost',
@@ -392,7 +390,7 @@ class RunReaderTest(LoaderTestCase):
                                [event2.SerializeToString()])
     with self.connect_db() as db_conn:
       with self.EventLog(path1) as log1, self.EventLog(path2) as log2:
-        with loader.RunReader(id_, 'doodle') as run:
+        with loader.RunReader(2, 1, 1, 'doodle') as run:
           run.add_event_log(db_conn, log1)
           run.add_event_log(db_conn, log2)
           run.mark()
@@ -406,7 +404,6 @@ class RunReaderTest(LoaderTestCase):
           run.mark()
 
   def testMarkWithShrinkingBatchSize_raisesValueError(self):
-    id_ = db.RUN_ROWID.create(1, 1)
     event1 = tf.Event(step=123)
     event2 = tf.Event(step=456)
     path1 = self._save_records('events.out.tfevents.1.localhost',
@@ -415,7 +412,7 @@ class RunReaderTest(LoaderTestCase):
                                [event2.SerializeToString()])
     with self.connect_db() as db_conn:
       with self.EventLog(path1) as log1, self.EventLog(path2) as log2:
-        with loader.RunReader(id_, 'doodle') as run:
+        with loader.RunReader(2, 1, 1, 'doodle') as run:
           run.add_event_log(db_conn, log1)
           run.add_event_log(db_conn, log2)
           run.mark()
@@ -428,7 +425,6 @@ class RunReaderTest(LoaderTestCase):
             run.mark()
 
   def testRestartProgram_resumesThings(self):
-    id_ = db.RUN_ROWID.create(1, 1)
     event1 = tf.Event(step=123)
     event2 = tf.Event(step=456)
     path = self._save_records('events.out.tfevents.1.localhost',
@@ -436,12 +432,12 @@ class RunReaderTest(LoaderTestCase):
                                event2.SerializeToString()])
     with self.connect_db() as db_conn:
       with self.EventLog(path) as log:
-        with loader.RunReader(id_, 'doodle') as run:
+        with loader.RunReader(2, 1, 1, 'doodle') as run:
           run.add_event_log(db_conn, log)
           self.assertEqual(event1, run.get_next_event())
           run.save_progress(db_conn)
       with self.EventLog(path) as log:
-        with loader.RunReader(id_, 'doodle') as run:
+        with loader.RunReader(2, 1, 1, 'doodle') as run:
           run.add_event_log(db_conn, log)
           self.assertEqual(event2, run.get_next_event())
 
