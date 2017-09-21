@@ -1098,6 +1098,77 @@ def get_event_logs(directory):
 _EVENT_LOG_PATH_PATTERN = re.compile(
     r'\.tfevents\.(?P<timestamp>\d+).(?P<hostname>[-.0-9A-Za-z]+)$')
 
+# TODO(jlewi): Should this be a member function of RunReader?
+def process_event_logs(run_reader, event_logs, db_conn):
+  event_logs.sort()
+  # Add all event logs to the reader.
+  for l in event_logs:
+    run_reader.add_event_log(l)
+
+  # TODO(jlewi):
+  # Do we need to periodically checkpoint progress?
+  # Do we need to check for newly appearing files?
+  #
+  # Process wll the events:
+  seen_tag_ids = set()
+  while True:
+    event = run_reader.get_next_event()
+    if not event:
+      # Save progress.
+      run_reader.mark()
+      run_reader.save_progress(self, db_conn)
+      return
+    # TODO(jlewi): Load the event into the DB.
+    # TODO(jlewi): We need to remember plugin because not all entries will
+    # be tagged with plugin.
+    if not event.has_summary():
+      # Only summaries are loaded into TensorBoard's DB.
+      continue
+    step = event.step
+    for v in event.summary.value:
+      if v.has_simple_value:
+        # TODO(jlewi): Should simple_values be stored as Tensors in the Tensors
+        # table?
+        # See https://github.com/tensorflow/tensorboard/issues/92#issuecomment-331034076
+        continue
+      if v.has_tensor():
+        # Insert a row into the tags table if it doesn't already exist.
+        # TODO(jlewi): Need to add error handling for case where row already
+        # exists.
+        # TODO(jlewi): We should cache the tagids we've already loaded so
+        # that we won't try to reload them.
+
+        # TODO(jlewi): Need to lookup Plugin id given plugin name.
+        if not v.tag in seen_tag_ids:
+          seen_tag_ids.add(v.tag)
+
+          # Look up the plugin id.
+          with contextlib.closing(db_conn.cursor()) as c:
+            # Check if we've already started loading this event log into the DB.
+            # if we have then we return the offset so that we can continue loading
+            # events.
+            plugin_name = v.summary_metadata.plugin_data.plugin_name
+
+            # TODO(jlewi): We should be using db.TensorBase.get_plugin_ids
+            c.execute(
+                'SELECT plugin_id FROM Plugins WHERE name = ?', (plugin_name))
+
+            if c.rowcount == 0:
+              raise ValueError('No plugin found for plugin name: {0}'.format(plugin_name))
+            if c.rowcount > 1:
+              raise ValueError('More than 1 plugin found with plugin name: {0}'.format(plugin_name))
+            row = c.fetchone()
+            plugin_id = row[0]
+
+          rowid = db.TAG_ID(experiment_id, v.tag)
+          with contextlib.closing(db_conn.cursor()) as c:
+            c.execute(
+                ('INSERT INTO Tag (row_id, customer_number, run_id, tag_id, plugin_id, '
+                 'name, display_name, summary_description) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+                (rowid, run_reader.customer_number, run_reader.run_id, v.tag,
+                 plugin_id, v.summary_metadata.name, v.summary_metadata.display_name,))
+
+        # TODO(jlewi): Add tensor to the database.
 
 def is_event_log_file(path):
   """Returns True if path appears to be an event log file.

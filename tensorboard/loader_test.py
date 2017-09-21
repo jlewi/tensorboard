@@ -442,6 +442,8 @@ class RunReaderTest(LoaderTestCase):
           self.assertEqual(event2, run.get_next_event())
 
 
+class ProcessEventsTest():
+
 @util.closeable
 class RecordWriter(object):
   def __init__(self, path):
