@@ -450,6 +450,11 @@ def parse_sql(sql, parameters):
     table = m.group(1)
     columns = [c.strip() for c in m.group(2).split(',')]
     values = [v.strip() for v in m.group(3).split(',')]
+    # Strip leading and trailing quotes from strings
+    for i, v in enumerate(values):
+      if (v[0] == '"' and v[-1] == '"') or (v[0] == "'" and v[-1] == "'"):
+        values[i] = v[1:-1]
+
     return InsertSQL(table, columns, values)
 
   m = SELECT_PATTERN.match(sql)

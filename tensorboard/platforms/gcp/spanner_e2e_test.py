@@ -55,91 +55,90 @@ class CloudSpannerCursorTest(tf.test.TestCase):
         project, instance_name, database_name)
     tb_spanner.create_database(cls.conn.client, instance_name, database_name)
 
-# DO NOT SUBMIT uncomment.
-  #def testInsertSql(self):
-    #"""Test that insert SQL statements work."""
+  def testInsertSql(self):
+    """Test that insert SQL statements work."""
 
-    ## Insert a row into EventLogs
-    #now = datetime.datetime.now()
-    #rowid = int(now.strftime("%Y%m%d%H%M%S"))
-    #run_id = rowid
-    #event_log_id = rowid
-    #path = "some_path_{0}".format(rowid)
-    #customer_number = 10
-    #offset = 23
-    #with contextlib.closing(self.conn.cursor()) as c:
-      #c.execute(
-          #('INSERT INTO EventLogs (rowid, customer_number, run_id, '
-           #'event_log_id, path, offset) VALUES (?, ?, ?, ?, ?, ?)'),
-          #(rowid, customer_number, run_id, event_log_id, path, offset))
+    # Insert a row into EventLogs
+    now = datetime.datetime.now()
+    rowid = int(now.strftime("%Y%m%d%H%M%S"))
+    run_id = rowid
+    event_log_id = rowid
+    path = "some_path_{0}".format(rowid)
+    customer_number = 10
+    offset = 23
+    with contextlib.closing(self.conn.cursor()) as c:
+      c.execute(
+          ('INSERT INTO EventLogs (rowid, customer_number, run_id, '
+           'event_log_id, path, offset) VALUES (?, ?, ?, ?, ?, ?)'),
+          (rowid, customer_number, run_id, event_log_id, path, offset))
 
-    #with self.conn.database.snapshot() as snapshot:
-      ## Verify that we can read the row.
-      #keyset = spanner.KeySet([[rowid, customer_number, run_id, event_log_id]])
+    with self.conn.database.snapshot() as snapshot:
+      # Verify that we can read the row.
+      keyset = spanner.KeySet([[rowid, customer_number, run_id, event_log_id]])
 
-      #results = snapshot.read(
-          #table='EventLogs',
-          #columns=('rowid', 'customer_number', 'run_id',
-                   #'event_log_id', 'path', 'offset',),
-          #keyset=keyset,)
+      results = snapshot.read(
+          table='EventLogs',
+          columns=('rowid', 'customer_number', 'run_id',
+                   'event_log_id', 'path', 'offset',),
+          keyset=keyset,)
 
-      #rows = []
-      #for row in results:
-        #rows.append(row)
+      rows = []
+      for row in results:
+        rows.append(row)
 
-      #self.assertEquals(1, len(rows))
-      #self.assertAllEqual([rowid, customer_number, run_id,
-                           #event_log_id, path, offset], rows[0])
+      self.assertEquals(1, len(rows))
+      self.assertAllEqual([rowid, customer_number, run_id,
+                           event_log_id, path, offset], rows[0])
 
-  #def testSelectSql(self):
-    #"""Test verifies we can issue select queries against Cloud Spanner."""
-    #rows = [
-        #[297, 0, 0, 0, 'path_0', 0],
-        #[297, 0, 0, 1, 'path_1', 1],
-        #[392, 0, 1, 0, 'path_0', 0],
-        #[392, 0, 1, 1, 'path_1', 1],
-    #]
+  def testSelectSql(self):
+    """Test verifies we can issue select queries against Cloud Spanner."""
+    rows = [
+        [297, 0, 0, 0, 'path_0', 0],
+        [297, 0, 0, 1, 'path_1', 1],
+        [392, 0, 1, 0, 'path_0', 0],
+        [392, 0, 1, 1, 'path_1', 1],
+    ]
 
-    #with self.conn.database.batch() as batch:
-      #batch.insert(
-          #table='EventLogs',
-          #columns=['rowid', 'customer_number',
-                   #'run_id', 'event_log_id', 'path', 'offset'],
-          #values=rows)
+    with self.conn.database.batch() as batch:
+      batch.insert(
+          table='EventLogs',
+          columns=['rowid', 'customer_number',
+                   'run_id', 'event_log_id', 'path', 'offset'],
+          values=rows)
 
-    #with contextlib.closing(self.conn.cursor()) as c:
-      #c.execute(
-          #('SELECT rowid, customer_number, run_id, event_log_id, path, offset '
-           #' from EventLogs where rowid = ? and event_log_id = ?'),
-          #(297, 0))
-      #row = c.fetchone()
-      #self.assertAllEqual([297, 0, 0, 0, 'path_0', 0], row)
+    with contextlib.closing(self.conn.cursor()) as c:
+      c.execute(
+          ('SELECT rowid, customer_number, run_id, event_log_id, path, offset '
+           ' from EventLogs where rowid = ? and event_log_id = ?'),
+          (297, 0))
+      row = c.fetchone()
+      self.assertAllEqual([297, 0, 0, 0, 'path_0', 0], row)
 
-      #self.assertEqual(1, c.rowcount)
-      ## According to PEP 249 fetchone should return None if no more rows.
-      #self.assertIsNone(c.fetchone())
+      self.assertEqual(1, c.rowcount)
+      # According to PEP 249 fetchone should return None if no more rows.
+      self.assertIsNone(c.fetchone())
 
-      ## Check the descriptions.
-      #description = c.description
-      #names = [d[0] for d in description]
-      #self.assertAllEqual(['rowid', 'customer_number',
-                           #'run_id', 'event_log_id', 'path', 'offset'], names)
+      # Check the descriptions.
+      description = c.description
+      names = [d[0] for d in description]
+      self.assertAllEqual(['rowid', 'customer_number',
+                           'run_id', 'event_log_id', 'path', 'offset'], names)
 
-    ## Test that a cursor is iterable.
-    #with contextlib.closing(self.conn.cursor()) as c:
-      #c.execute(
-          #('SELECT rowid, customer_number, run_id, event_log_id, path, offset '
-           #' from EventLogs where rowid = ?'),
-          #(392,))
+    # Test that a cursor is iterable.
+    with contextlib.closing(self.conn.cursor()) as c:
+      c.execute(
+          ('SELECT rowid, customer_number, run_id, event_log_id, path, offset '
+           ' from EventLogs where rowid = ?'),
+          (392,))
 
-      #self.assertEqual(2, c.rowcount)
+      self.assertEqual(2, c.rowcount)
 
-      #results = []
-      #for row in c:  # pylint: disable=not-an-iterable
-        #results.append(row)
+      results = []
+      for row in c:  # pylint: disable=not-an-iterable
+        results.append(row)
 
-      #self.assertAllEqual(rows[2], results[0])
-      #self.assertAllEqual(rows[3], results[1])
+      self.assertAllEqual(rows[2], results[0])
+      self.assertAllEqual(rows[3], results[1])
 
   def testLoader(self):
     """E2E test for the loader using Cloud Spanner."""
@@ -156,7 +155,7 @@ class CloudSpannerCursorTest(tf.test.TestCase):
     save_records(events_path, records)
 
     log = loader.EventLogReader(events_path)
-    customer_number = 2
+    customer_number = 29
     experiment_id = 3
     run_id = 4
     name =  'test-run'
@@ -164,6 +163,28 @@ class CloudSpannerCursorTest(tf.test.TestCase):
 
     self.assertTrue(run_reader.add_event_log(self.conn, log))
 
-    # TODO(jlewi): Assert that EventLogId was correctly added.
+    with self.conn.database.snapshot() as snapshot:
+      # Verify that we can read the EventLogs row.
+      keyset = spanner.KeySet(all_=True)
+
+      results = snapshot.read(
+          table='EventLogs',
+          columns=('rowid', 'customer_number', 'run_id',
+                   'event_log_id', 'path', 'offset',),
+          keyset=keyset,)
+
+      rows = []
+      for row in results:
+        rows.append(row)
+
+      self.assertEquals(1, len(rows))
+      self.assertAllEqual(customer_number, rows[0][1])
+      self.assertAllEqual(run_id, rows[0][2])
+
+      # EventLog id should be non-zero
+      self.assertGreater(rows[0][3], 0)
+      self.assertEqual(events_path, rows[0][4])
+      self.assertEqual(0, rows[0][5])
+
 if __name__ == "__main__":
   tf.test.main()
