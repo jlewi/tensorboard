@@ -100,21 +100,6 @@ class TensorBase(object):
     return {name: self._plugin_ids_by_name[name] for name in names}
 
 
-  def insert_tag_id(self, customer_number, experiment_id, run_id, tag_id, plugin_id,
-                    name, display_name, summary_description):
-    """Insert a tag id."""
-
-    rowid = TAG_ROWID.create(experiment_id, tag_id)
-    with contextlib.closing(self._db_connection_provider()) as conn:
-      with contextlib.closing(conn.cursor()) as c:
-        # TODO(jlewi): experiment_id should probably be stored in the table as
-        # well.
-        c.execute(
-            ('INSERT INTO Tags (rowid, customer_number, run_id, tag_id, plugin_id, '
-             'name, display_name, summary_description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
-            (rowid, customer_number, run_id, tag_id,
-             plugin_id, name, display_name, summary_description))
-
 def _sync_plugins(names, connection):
   """Fetches Plugins table and assigns IDs for new names if necessary.
 
@@ -724,3 +709,18 @@ RUN_ROWID = RowId('Runs.rowid', EXPERIMENT_ID, RUN_ID)
 TAG_ROWID = RowId('Tags.rowid', EXPERIMENT_ID, TAG_ID)
 TENSOR_ROWID = RowId('Tensors.rowid', TAG_ID, STEP_ID)
 EVENT_LOG_ROWID = RowId('EventLogs.rowid', RUN_ID, EVENT_LOG_ID)
+
+# Constants defining different tensor encodings
+# UNCOMPRESSED_TENSOR is a serialized TensorProto.
+UNCOMPRESSED_TENSOR = 0
+# GZIP_TENSOR_1 ... GZIP_TENSOR_9 are serialized TensorProtos that are gzipped
+# at the level indicated by the suffix.
+GZIP_TENSOR_1 = 1
+GZIP_TENSOR_2 = 2
+GZIP_TENSOR_3 = 3
+GZIP_TENSOR_4 = 4
+GZIP_TENSOR_5 = 5
+GZIP_TENSOR_6 = 6
+GZIP_TENSOR_7 = 7
+GZIP_TENSOR_8 = 8
+GZIP_TENSOR_9 = 9

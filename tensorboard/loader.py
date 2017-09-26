@@ -1199,3 +1199,51 @@ def _localize_int(n):
   :rtype: str
   """
   return locale.format('%d', n, grouping=True)
+
+def insert_tag_id(conn, customer_number, experiment_id, run_id, tag_id, plugin_id,
+                  name, display_name, summary_description):
+  """Insert a tag id."""
+
+  rowid = db.TAG_ROWID.create(experiment_id, tag_id)
+  with contextlib.closing(conn.cursor()) as c:
+    # TODO(jlewi): experiment_id should probably be stored in the table as
+    # well.
+    c.execute(
+      ('INSERT INTO Tags (rowid, customer_number, run_id, tag_id, plugin_id, '
+         'name, display_name, summary_description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
+        (rowid, customer_number, run_id, tag_id,
+         plugin_id, name, display_name, summary_description))
+
+# TODO(jlewi): Should we allow the caller to specify the encoding?
+def insert_tensor(conn, customer_number, tag_id, step_count, tensor):
+  """Insert a Tensor into the database.
+
+  Args:
+    conn: Database connection
+    customer_number: Id of the customer that owns the tensor.
+    tag_id: The tag id of the tensors.
+    step_count: The step at which the tensor was recorded.
+    tensor: A TensorProto describing the proto.
+
+  :type conn: Connection
+  :type customer_number: int64
+  :type tag_id: int
+  :type step_count: int
+  :type tensor: TensorProto
+  """
+  rowid = db.TENSOR_ROWID.create(tag_id, step_count)
+
+  # TODO(jlewi): How should we decide how to encode the Tensor? Can we
+  # determine automatically whether we should compress it? Or should we
+  # make the caller determine how to compress it?
+  encoding = db.UNCOMPRESSED_TENSOR
+
+  # TODO(jlewi): Need to add handling for BigTensors.
+  is_big = False
+  with contextlib.closing(conn.cursor()) as c:
+    # TODO(jlewi): experiment_id should probably be stored in the table as
+    # well.
+    c.execute(
+      ('INSERT INTO Tensors (rowid, customer_number, tag_id, step_count, encoding, is_big, tensor) '
+         'VALUES (?, ?, ?, ?, ?, ?, ?)'),
+        (rowid, customer_number, tag_id, step_count, encoding, is_big, tensor.SerializeToString()))
