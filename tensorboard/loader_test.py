@@ -19,7 +19,9 @@ from __future__ import print_function
 import functools
 import contextlib
 import locale
+import numpy as np
 import os
+import tempfile
 
 import six
 import tensorflow as tf
@@ -32,35 +34,35 @@ from tensorboard import test_util
 from tensorboard import util
 
 
-#class LoaderTestCase(test_util.TestCase):
-  #def __init__(self, *args, **kwargs):
-    #super(LoaderTestCase, self).__init__(*args, **kwargs)
-    #self.clock = test_util.FakeClock()
-    #self.sleep = test_util.FakeSleep(self.clock)
+class LoaderTestCase(test_util.TestCase):
+  def __init__(self, *args, **kwargs):
+    super(LoaderTestCase, self).__init__(*args, **kwargs)
+    self.clock = test_util.FakeClock()
+    self.sleep = test_util.FakeSleep(self.clock)
 
-  #def _save_string(self, name, data):
-    #"""Writes new file to temp directory.
+  def _save_string(self, name, data):
+    """Writes new file to temp directory.
 
-    #:type name: str
-    #:type data: str
-    #"""
-    #path = os.path.join(self.get_temp_dir(), name)
-    #with open(path, 'wb') as writer:
-      #writer.write(tf.compat.as_bytes(data))
-    #return path
+    :type name: str
+    :type data: str
+    """
+    path = os.path.join(self.get_temp_dir(), name)
+    with open(path, 'wb') as writer:
+      writer.write(tf.compat.as_bytes(data))
+    return path
 
-  #def _save_records(self, name, records):
-    #"""Writes new record file to temp directory.
+  def _save_records(self, name, records):
+    """Writes new record file to temp directory.
 
-    #:type name: str
-    #:type records: list[str]
-    #:rtype: str
-    #"""
-    #path = os.path.join(self.get_temp_dir(), name)
-    #with RecordWriter(path) as writer:
-      #for record in records:
-        #writer.write(record)
-    #return path
+    :type name: str
+    :type records: list[str]
+    :rtype: str
+    """
+    path = os.path.join(self.get_temp_dir(), name)
+    with RecordWriter(path) as writer:
+      for record in records:
+        writer.write(record)
+    return path
 
 
 #class RecordReaderTest(LoaderTestCase):
@@ -445,52 +447,86 @@ from tensorboard import util
           #self.assertEqual(event2, run.get_next_event())
 
 
-#class ProcessEventsTest():
+class ProcessEventsTest(LoaderTestCase):
+  def testProcessEvents(self):
 
-#@util.closeable
-#class RecordWriter(object):
-  #def __init__(self, path):
-    #self.path = tf.compat.as_bytes(path)
-    #self._writer = self._make_writer()
+    # Create a summary file with some events.
+    records = []
+    for i in range(5):
+      event = tf.Event(step=i)
+      # TODO(jlewi): We should probably add multiple values to make sure
+      # we cover that case.
+      v = event.summary.value.add()
+      v.tag = 'event_{0}_0'.format(i)
+      v.tensor.dtype = types_pb2.DT_INT64
+      nums = np.zeros(10, dtype=np.int64)
+      nums[0:i+1] = np.arange(i+1, dtype=np.int64) + 1
+      v.tensor.int64_val.extend(nums)
+      v.metadata.plugin_data.plugin_name = 'some-plugin'
+      records.append(event.SerializeToString())
 
-  #def write(self, record):
-    #if not self._writer.WriteRecord(tf.compat.as_bytes(record)):
-      #raise IOError('Failed to write record to ' + self.path)
+    # Events file must have a name matching the expected pattern.
+    events_path = os.path.join(tempfile.mkdtemp(),
+                               'somevents.tfevents.1234.somehost')
+    with RecordWriter(events_path) as writer:
+      for record in records:
+        writer.write(record)
 
-  #def close(self):
-    #with tf.errors.raise_exception_on_not_ok_status() as status:
-      #self._writer.Close(status)
+    log = loader.EventLogReader(events_path)
+    customer_number = 29
+    experiment_id = 3
+    run_id = 4
+    name =  'test-run'
+    run_reader = loader.RunReader(customer_number, experiment_id, run_id, name)
 
-  #def _make_writer(self):
-    #with tf.errors.raise_exception_on_not_ok_status() as status:
-      #return tf.pywrap_tensorflow.PyRecordWriter_New(
-          #self.path, tf.compat.as_bytes(''), status)
+    loader.process_event_logs(run_reader, [log], self.tbase)
+
+    # TODO(jlewi): Check that the tensors were written.
+
+@util.closeable
+class RecordWriter(object):
+  def __init__(self, path):
+    self.path = tf.compat.as_bytes(path)
+    self._writer = self._make_writer()
+
+  def write(self, record):
+    if not self._writer.WriteRecord(tf.compat.as_bytes(record)):
+      raise IOError('Failed to write record to ' + self.path)
+
+  def close(self):
+    with tf.errors.raise_exception_on_not_ok_status() as status:
+      self._writer.Close(status)
+
+  def _make_writer(self):
+    with tf.errors.raise_exception_on_not_ok_status() as status:
+      return tf.pywrap_tensorflow.PyRecordWriter_New(
+          self.path, tf.compat.as_bytes(''), status)
 
 
-class TagsTest(test_util.TestCase):
+#class TagsTest(test_util.TestCase):
 
-  def testInsertTagId(self):
-    customer_number = 22
-    experiment_id = 2
-    run_id = 10
-    tag_id = 20
-    plugin_id = 30
-    loader.insert_tag_id(self.connect_db(),
-                         customer_number, experiment_id, run_id, tag_id,
-                         plugin_id, 'name', 'display tag', 'description')
+  #def testInsertTagId(self):
+    #customer_number = 22
+    #experiment_id = 2
+    #run_id = 10
+    #tag_id = 20
+    #plugin_id = 30
+    #loader.insert_tag_id(self.connect_db(),
+                         #customer_number, experiment_id, run_id, tag_id,
+                         #plugin_id, 'name', 'display tag', 'description')
 
-    with contextlib.closing(self.connect_db()) as conn:
-      with contextlib.closing(conn.cursor()) as c:
-        c.execute('select customer_number, plugin_id, name, display_name, '
-                  'summary_description from Tags where run_id = ? and tag_id = ?',
-                  (run_id, tag_id))
-        row = c.fetchone()
+    #with contextlib.closing(self.connect_db()) as conn:
+      #with contextlib.closing(conn.cursor()) as c:
+        #c.execute('select customer_number, plugin_id, name, display_name, '
+                  #'summary_description from Tags where run_id = ? and tag_id = ?',
+                  #(run_id, tag_id))
+        #row = c.fetchone()
 
-        self.assertEqual(customer_number, row[0])
-        self.assertEqual(plugin_id, row[1])
-        self.assertEqual('name', row[2])
-        self.assertEqual('display tag', row[3])
-        self.assertEqual('description', row[4])
+        #self.assertEqual(customer_number, row[0])
+        #self.assertEqual(plugin_id, row[1])
+        #self.assertEqual('name', row[2])
+        #self.assertEqual('display tag', row[3])
+        #self.assertEqual('description', row[4])
 
 #class TensorsTest(test_util.TestCase):
 
