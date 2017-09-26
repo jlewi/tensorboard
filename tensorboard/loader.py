@@ -32,6 +32,7 @@ import sys
 import time
 import threading
 import types  # pylint: disable=unused-import
+import uuid
 
 import six
 import tensorflow as tf
@@ -1123,13 +1124,14 @@ def process_event_logs(run_reader, event_logs, tbase):
   # Do we need to check for newly appearing files?
   #
   # Process wll the events:
-  seen_tag_ids = set()
+  # A map from tag names to tag id.
+  tags = {}
   while True:
     event = run_reader.get_next_event()
     if not event:
       # Save progress.
       run_reader.mark()
-      run_reader.save_progress(self, db_conn)
+      run_reader.save_progress(db_conn)
       return
     # TODO(jlewi): Load the event into the DB.
     # TODO(jlewi): We need to remember plugin because not all entries will
@@ -1152,21 +1154,22 @@ def process_event_logs(run_reader, event_logs, tbase):
         # that we won't try to reload them.
 
         # TODO(jlewi): Need to lookup Plugin id given plugin name.
-        if not v.tag in seen_tag_ids:
-          seen_tag_ids.add(v.tag)
-
+        if not v.tag in tags:
           # Look up the plugin id.
           plugin_name = v.metadata.plugin_data.plugin_name
 
-          plugins = tbase.get_pluginids([plugin_name])
+          plugins = tbase.get_plugin_ids([plugin_name])
           plugin_id = plugins[plugin_name]
 
-          insert_tag_id(db_conn,
-              run_reader.customer_number, run_reader.run_id, v.tag,
-              plugin_id, v.summary_metadata.name, v.summary_metadata.display_name)
 
+          tag_id = insert_tag_id(db_conn,
+              run_reader.customer_number, run_reader.experiment_id, run_reader.run_id,
+              plugin_id, v.tag, v.metadata.display_name,
+              v.metadata.summary_description)
+
+          tags[v.tag] = tag_id
         # TODO(jlewi): Add tensor to the database.
-        insert_tensor(db_conn, run_reader.customer_number, v.tag,
+        insert_tensor(db_conn, run_reader.customer_number, tags[v.tag],
                       step, v.tensor)
 
 def is_event_log_file(path):
@@ -1203,10 +1206,13 @@ def _localize_int(n):
   """
   return locale.format('%d', n, grouping=True)
 
-def insert_tag_id(conn, customer_number, experiment_id, run_id, tag_id, plugin_id,
+def insert_tag_id(conn, customer_number, experiment_id, run_id, plugin_id,
                   name, display_name, summary_description):
   """Insert a tag id."""
 
+  # TODO(jlewi): What's the best way to generate a tag id?
+  # We generate 31 random bits.
+  tag_id = uuid.uuid4().int  & (2**31-1)
   rowid = db.TAG_ROWID.create(experiment_id, tag_id)
   with contextlib.closing(conn.cursor()) as c:
     # TODO(jlewi): experiment_id should probably be stored in the table as
@@ -1216,6 +1222,8 @@ def insert_tag_id(conn, customer_number, experiment_id, run_id, tag_id, plugin_i
          'name, display_name, summary_description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
         (rowid, customer_number, run_id, tag_id,
          plugin_id, name, display_name, summary_description))
+
+  return tag_id
 
 # TODO(jlewi): Should we allow the caller to specify the encoding?
 def insert_tensor(conn, customer_number, tag_id, step_count, tensor):
