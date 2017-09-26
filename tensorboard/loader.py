@@ -1160,13 +1160,9 @@ def process_event_logs(run_reader, event_logs, db_conn):
             row = c.fetchone()
             plugin_id = row[0]
 
-          rowid = db.TAG_ID(experiment_id, v.tag)
-          with contextlib.closing(db_conn.cursor()) as c:
-            c.execute(
-                ('INSERT INTO Tag (row_id, customer_number, run_id, tag_id, plugin_id, '
-                 'name, display_name, summary_description) VALUES (?, ?, ?, ?, ?, ?, ?)'),
-                (rowid, run_reader.customer_number, run_reader.run_id, v.tag,
-                 plugin_id, v.summary_metadata.name, v.summary_metadata.display_name,))
+          tbase.insert_tag_id(
+              run_reader.customer_number, run_reader.run_id, v.tag,
+              plugin_id, v.summary_metadata.name, v.summary_metadata.display_name)
 
         # TODO(jlewi): Add tensor to the database.
 

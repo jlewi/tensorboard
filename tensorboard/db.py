@@ -100,6 +100,21 @@ class TensorBase(object):
     return {name: self._plugin_ids_by_name[name] for name in names}
 
 
+  def insert_tag_id(self, customer_number, experiment_id, run_id, tag_id, plugin_id,
+                    name, display_name, summary_description):
+    """Insert a tag id."""
+
+    rowid = TAG_ROWID.create(experiment_id, tag_id)
+    with contextlib.closing(self._db_connection_provider()) as conn:
+      with contextlib.closing(conn.cursor()) as c:
+        # TODO(jlewi): experiment_id should probably be stored in the table as
+        # well.
+        c.execute(
+            ('INSERT INTO Tags (rowid, customer_number, run_id, tag_id, plugin_id, '
+             'name, display_name, summary_description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
+            (rowid, customer_number, run_id, tag_id,
+             plugin_id, name, display_name, summary_description))
+
 def _sync_plugins(names, connection):
   """Fetches Plugins table and assigns IDs for new names if necessary.
 
