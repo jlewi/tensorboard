@@ -33,6 +33,7 @@ class PluginsTest(test_util.TestCase):
     self.assertEqual({'b': 1}, self.tbase.get_plugin_ids(['b']))
     self.assertEqual({'b': 1, 'c': 3}, self.tbase.get_plugin_ids(['c', 'b']))
 
+
 class TransactionTest(test_util.TestCase):
 
   def setUp(self):

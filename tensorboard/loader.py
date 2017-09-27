@@ -1113,57 +1113,58 @@ def process_event_logs(run_reader, event_logs, tbase):
   """
   db_conn = tbase._db_connection_provider()
 
-  event_logs.sort()
-  # Add all event logs to the reader.
-  for l in event_logs:
-    run_reader.add_event_log(db_conn, l)
+  with contextlib.closing(run_reader):
+    event_logs.sort()
+    # Add all event logs to the reader.
+    for l in event_logs:
+      run_reader.add_event_log(db_conn, l)
 
-  # TODO(jlewi):
-  # Do we need to periodically checkpoint progress?
-  # Do we need to check for newly appearing files?
-  #
-  # Process wll the events:
-  # A map from tag names to tag id.
-  tags = {}
-  while True:
-    event = run_reader.get_next_event()
-    if not event:
-      # Save progress.
-      run_reader.mark()
-      run_reader.save_progress(db_conn)
-      return
-    # TODO(jlewi): Load the event into the DB.
-    if not event.HasField('summary'):
-      # Only summaries are loaded into TensorBoard's DB.
-      continue
-    step = event.step
-    for v in event.summary.value:
-      if v.HasField('simple_value'):
-        # TODO(jlewi): Should simple_values be stored as Tensors in the Tensors
-        # table?
-        # See https://github.com/tensorflow/tensorboard/issues/92#issuecomment-331034076  # pylint: disable=line-too-long
+    # TODO(jlewi):
+    # Do we need to periodically checkpoint progress?
+    # Do we need to check for newly appearing files?
+    #
+    # Process wll the events:
+    # A map from tag names to tag id.
+    tags = {}
+    while True:
+      event = run_reader.get_next_event()
+      if not event:
+        # Save progress.
+        run_reader.mark()
+        run_reader.save_progress(db_conn)
+        return
+      # TODO(jlewi): Load the event into the DB.
+      if not event.HasField('summary'):
+        # Only summaries are loaded into TensorBoard's DB.
         continue
-      if v.HasField('tensor'):
-        # Insert a row into the tags table if it doesn't already exist.
-        # TODO(jlewi): Need to add error handling for case where row already
-        # exists.
+      step = event.step
+      for v in event.summary.value:
+        if v.HasField('simple_value'):
+          # TODO(jlewi): Should simple_values be stored as Tensors in the Tensors
+          # table?
+          # See https://github.com/tensorflow/tensorboard/issues/92#issuecomment-331034076  # pylint: disable=line-too-long
+          continue
+        if v.HasField('tensor'):
+          # Insert a row into the tags table if it doesn't already exist.
+          # TODO(jlewi): Need to add error handling for case where row already
+          # exists.
 
-        if not v.tag in tags:
-          # Look up the plugin id.
-          plugin_name = v.metadata.plugin_data.plugin_name
+          if not v.tag in tags:
+            # Look up the plugin id.
+            plugin_name = v.metadata.plugin_data.plugin_name
 
-          plugins = tbase.get_plugin_ids([plugin_name])
-          plugin_id = plugins[plugin_name]
+            plugins = tbase.get_plugin_ids([plugin_name])
+            plugin_id = plugins[plugin_name]
 
 
-          tag_id = insert_tag_id(db_conn, run_reader.customer_number,
-                                 run_reader.experiment_id, run_reader.run_id,
-                                 plugin_id, v.tag, v.metadata.display_name,
-                                 v.metadata.summary_description)
+            tag_id = insert_tag_id(db_conn, run_reader.customer_number,
+                                   run_reader.experiment_id, run_reader.run_id,
+                                   plugin_id, v.tag, v.metadata.display_name,
+                                   v.metadata.summary_description)
 
-          tags[v.tag] = tag_id
-        insert_tensor(db_conn, run_reader.customer_number, tags[v.tag],
-                      step, v.tensor)
+            tags[v.tag] = tag_id
+          insert_tensor(db_conn, run_reader.customer_number, tags[v.tag],
+                        step, v.tensor)
 
 def is_event_log_file(path):
   """Returns True if path appears to be an event log file.
