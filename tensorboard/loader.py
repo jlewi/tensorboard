@@ -1141,7 +1141,7 @@ def process_event_logs(run_reader, event_logs, tbase):
       if v.HasField('simple_value'):
         # TODO(jlewi): Should simple_values be stored as Tensors in the Tensors
         # table?
-        # See https://github.com/tensorflow/tensorboard/issues/92#issuecomment-331034076
+        # See https://github.com/tensorflow/tensorboard/issues/92#issuecomment-331034076  # pylint: disable=line-too-long
         continue
       if v.HasField('tensor'):
         # Insert a row into the tags table if it doesn't already exist.
@@ -1156,10 +1156,10 @@ def process_event_logs(run_reader, event_logs, tbase):
           plugin_id = plugins[plugin_name]
 
 
-          tag_id = insert_tag_id(db_conn,
-              run_reader.customer_number, run_reader.experiment_id, run_reader.run_id,
-              plugin_id, v.tag, v.metadata.display_name,
-              v.metadata.summary_description)
+          tag_id = insert_tag_id(db_conn, run_reader.customer_number,
+                                 run_reader.experiment_id, run_reader.run_id,
+                                 plugin_id, v.tag, v.metadata.display_name,
+                                 v.metadata.summary_description)
 
           tags[v.tag] = tag_id
         insert_tensor(db_conn, run_reader.customer_number, tags[v.tag],
@@ -1206,9 +1206,9 @@ def insert_tag_id(conn, customer_number, experiment_id, run_id, plugin_id,
   rowid = db.TAG_ROWID.create(experiment_id, tag_id)
   with contextlib.closing(conn.cursor()) as c:
     c.execute(
-      ('INSERT INTO Tags (rowid, customer_number, experiment_id, run_id, '
-       'tag_id, plugin_id, name, display_name, summary_description) VALUES '
-       '(?, ?, ?, ?, ?, ?, ?, ?, ?)'),
+        ('INSERT INTO Tags (rowid, customer_number, experiment_id, run_id, '
+         'tag_id, plugin_id, name, display_name, summary_description) VALUES '
+         '(?, ?, ?, ?, ?, ?, ?, ?, ?)'),
         (rowid, customer_number, experiment_id, run_id, tag_id,
          plugin_id, name, display_name, summary_description))
 
@@ -1244,6 +1244,7 @@ def insert_tensor(conn, customer_number, tag_id, step_count, tensor):
     # TODO(jlewi): experiment_id should probably be stored in the table as
     # well.
     c.execute(
-      ('INSERT INTO Tensors (rowid, customer_number, tag_id, step_count, encoding, is_big, tensor) '
-         'VALUES (?, ?, ?, ?, ?, ?, ?)'),
-        (rowid, customer_number, tag_id, step_count, encoding, is_big, tensor.SerializeToString()))
+        ('INSERT INTO Tensors (rowid, customer_number, tag_id, step_count, '
+         'encoding, is_big, tensor) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+        (rowid, customer_number, tag_id, step_count, encoding, is_big,
+         tensor.SerializeToString()))
