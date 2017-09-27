@@ -263,6 +263,7 @@ class Schema(object):
       c.execute('CREATE TABLE IF NOT EXISTS Tags ('
                 'rowid INTEGER PRIMARY KEY, '
                 'customer_number INTEGER, '
+                'experiment_id INTEGER, '
                 'run_id INTEGER NOT NULL, '
                 'tag_id INTEGER NOT NULL, '
                 'plugin_id INTEGER NOT NULL, '

@@ -32,7 +32,6 @@ import sys
 import time
 import threading
 import types  # pylint: disable=unused-import
-import uuid
 
 import six
 import tensorflow as tf
@@ -1134,8 +1133,6 @@ def process_event_logs(run_reader, event_logs, tbase):
       run_reader.save_progress(db_conn)
       return
     # TODO(jlewi): Load the event into the DB.
-    # TODO(jlewi): We need to remember plugin because not all entries will
-    # be tagged with plugin.
     if not event.HasField('summary'):
       # Only summaries are loaded into TensorBoard's DB.
       continue
@@ -1150,10 +1147,7 @@ def process_event_logs(run_reader, event_logs, tbase):
         # Insert a row into the tags table if it doesn't already exist.
         # TODO(jlewi): Need to add error handling for case where row already
         # exists.
-        # TODO(jlewi): We should cache the tagids we've already loaded so
-        # that we won't try to reload them.
 
-        # TODO(jlewi): Need to lookup Plugin id given plugin name.
         if not v.tag in tags:
           # Look up the plugin id.
           plugin_name = v.metadata.plugin_data.plugin_name
@@ -1168,7 +1162,6 @@ def process_event_logs(run_reader, event_logs, tbase):
               v.metadata.summary_description)
 
           tags[v.tag] = tag_id
-        # TODO(jlewi): Add tensor to the database.
         insert_tensor(db_conn, run_reader.customer_number, tags[v.tag],
                       step, v.tensor)
 
@@ -1209,18 +1202,14 @@ def _localize_int(n):
 def insert_tag_id(conn, customer_number, experiment_id, run_id, plugin_id,
                   name, display_name, summary_description):
   """Insert a tag id."""
-
-  # TODO(jlewi): What's the best way to generate a tag id?
-  # We generate 31 random bits.
-  tag_id = uuid.uuid4().int  & (2**31-1)
+  tag_id = db.TAG_ID.generate()
   rowid = db.TAG_ROWID.create(experiment_id, tag_id)
   with contextlib.closing(conn.cursor()) as c:
-    # TODO(jlewi): experiment_id should probably be stored in the table as
-    # well.
     c.execute(
-      ('INSERT INTO Tags (rowid, customer_number, run_id, tag_id, plugin_id, '
-         'name, display_name, summary_description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
-        (rowid, customer_number, run_id, tag_id,
+      ('INSERT INTO Tags (rowid, customer_number, experiment_id, run_id, '
+       'tag_id, plugin_id, name, display_name, summary_description) VALUES '
+       '(?, ?, ?, ?, ?, ?, ?, ?, ?)'),
+        (rowid, customer_number, experiment_id, run_id, tag_id,
          plugin_id, name, display_name, summary_description))
 
   return tag_id
