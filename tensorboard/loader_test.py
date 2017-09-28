@@ -16,6 +16,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from tensorboard import util
 from tensorflow.core.framework import tensor_pb2
 from tensorflow.core.framework import types_pb2
 
@@ -32,11 +33,7 @@ class TensorsTest(unittest.TestCase):
     stored = tensor_pb2.TensorProto()
 
     tensor_data = tensor.SerializeToString()
-    # TODO(jlewi): On Python 2.7 we need to encode as utf-8 to convert
-    # from unicode to str. Otherwise ParseFromString returns an empty proto.
-    # This is only a problem inside the Travis 2.7 environment.
-    uni_data = unicode(tensor_data)
-    stored.ParseFromString(uni_data)
+    util.parse_proto(stored, tensor_data)
     self.assertEqual(tensor, stored,
                      'Got {0} want {1}'.format(stored, tensor))
 
